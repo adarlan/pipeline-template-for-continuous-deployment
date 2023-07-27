@@ -1,0 +1,64 @@
+version: "3"
+
+networks:
+  traefik_network:
+
+services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - --api=true
+      - --api.dashboard=true
+      - --api.debug=true
+      - --api.insecure=true
+      - --entryPoints.traefik.address=:8080
+      - --log.level=DEBUG
+      - --entryPoints.web.address=:80
+      - --entryPoints.websecure.address=:443
+      - --providers.docker
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=traefik_network
+      - --providers.docker.watch=true
+      - --certificatesResolvers.certresolver.acme.email=acme@example.com
+      - --certificatesResolvers.certresolver.acme.storage=/acme/acme.json
+      - --certificatesResolvers.certresolver.acme.caServer=https://acme-v02.api.letsencrypt.org/directory
+      - --certificatesResolvers.certresolver.acme.keyType=RSA4096
+      - --certificatesResolvers.certresolver.acme.tlsChallenge=true
+      - --certificatesResolvers.certresolver.acme.httpChallenge=true
+      - --certificatesResolvers.certresolver.acme.httpChallenge.entryPoint=web
+    networks:
+      - traefik_network
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # - /home/$USER/acme.json:/acme/acme.json
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  webapp:
+    image: nginx
+    networks:
+      - traefik_network
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.lbswarm=true
+        - traefik.http.services.webapp.loadbalancer.server.port=80
+        - traefik.http.routers.webapp.rule=Host(`example.com`)
+        - traefik.http.routers.webapp.tls=true
+        - traefik.http.routers.webapp.tls.certresolver=certresolver
+        - traefik.http.routers.webapp.entrypoints=websecure
+        - traefik.http.routers.webapp.service=webapp
+        - traefik.http.routers.webapp_https_redirect.rule=Host(`example.com`)
+        - traefik.http.routers.webapp_https_redirect.entrypoints=web
+        - traefik.http.routers.webapp_https_redirect.middlewares=webapp_https_redirect
+        - traefik.http.middlewares.webapp_https_redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.webapp_https_redirect.redirectscheme.permanent=true
+        - traefik.http.middlewares.webapp_https_redirect.redirectscheme.port=443
