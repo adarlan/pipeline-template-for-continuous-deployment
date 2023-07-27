@@ -43,7 +43,7 @@ services:
           - node.role == manager
 
   webapp:
-    image: nginx
+    image: nginx:1
     networks:
       - traefik_network
     deploy:
