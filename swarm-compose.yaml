@@ -2,7 +2,7 @@ version: '3'
 
 networks:
   traefik_network:
-    external: true
+    name: traefik_network
 
 services:
 
