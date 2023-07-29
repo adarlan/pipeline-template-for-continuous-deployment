@@ -1,7 +1,64 @@
-version: "3"
+version: '3'
+
+networks:
+  traefik_network:
+    external: true
 
 services:
-  nginx:
-    image: nginx
+
+  traefik:
+    image: traefik:v2.1
+    command:
+      - --api.insecure=true
+      - --api.dashboard=true
+      - --api.debug=true
+      - --log.level=DEBUG
+      - --entryPoints.web.address=:80
+      - --entryPoints.traefik.address=:8080
+      - --providers.docker
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=traefik_network
+      - --providers.docker.watch=true
     ports:
       - 80:80
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - traefik_network
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  app_1:
+    image: nginx
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.app_1.loadbalancer.server.port=80
+        - traefik.http.routers.app_1.rule=Host(`rolling_stones.areopagus.tech`)
+
+  app_2:
+    image: nginx
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.app_2.loadbalancer.server.port=80
+        - traefik.http.routers.app_2.rule=Host(`rolling_stones.areopagus.tech`) && Path(`/app_2`)
+        - traefik.http.routers.app_2.middlewares=app_2_stripprefix
+        - traefik.http.middlewares.app_2_stripprefix.stripprefix.prefixes=/app_2
+        - traefik.http.middlewares.app_2_stripprefix.stripprefix.forceslash=false
+
+  app_3:
+    image: nginx
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.app_3.loadbalancer.server.port=80
+        - traefik.http.routers.app_3.rule=Host(`rolling_stones.areopagus.tech`) && PathPrefix(`/app_3`)
+        - traefik.http.routers.app_3.middlewares=app_3_stripprefix
+        - traefik.http.middlewares.app_3_stripprefix.stripprefix.prefixes=/app_3
+        - traefik.http.middlewares.app_3_stripprefix.stripprefix.forceslash=false
